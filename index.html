@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cisco Traffic Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #ffffff; text-align: center; margin: 0; padding: 20px; }
+        .card { width: 90%; max-width: 1000px; margin: 20px auto; background-color: #1e1e1e; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        h2 { color: #00bcd4; margin-bottom: 20px; }
+        #status { font-weight: bold; padding: 6px 12px; border-radius: 5px; display: inline-block; margin-bottom: 15px; }
+        .online { background-color: #2e7d32; color: #fff; }
+        .offline { background-color: #c62828; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Cisco Router Interface 1/1 Real-time Traffic (Mbps)</h2>
+        <div id="status" class="offline">WebSocket: Disconnected</div>
+        <canvas id="trafficChart" height="120"></canvas>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const ws = new WebSocket('ws://192.168.207.130:8765');
+
+        const ctx = document.getElementById('trafficChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { 
+                        label: 'Inbound Traffic (Mbps)', 
+                        borderColor: '#00e676', 
+                        backgroundColor: 'rgba(0, 230, 118, 0.2)', 
+                        data: [], 
+                        fill: true, 
+                        tension: 0.3 
+                    },
+                    { 
+                        label: 'Outbound Traffic (Mbps)', 
+                        borderColor: '#ff1744', 
+                        backgroundColor: 'rgba(255, 23, 68, 0.2)', 
+                        data: [], 
+                        fill: true, 
+                        tension: 0.3 
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                animation: false,
+                scales: {
+                    x: { ticks: { color: '#b0bec5' }, grid: { color: '#37474f' } },
+                    y: { 
+                        ticks: { color: '#b0bec5' }, 
+                        grid: { color: '#37474f' }, 
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        ws.onopen = () => {
+            statusDiv.textContent = "WebSocket: Connected";
+            statusDiv.className = "online";
+            console.log("WebSocket connected successfully!");
+        };
+
+        ws.onclose = () => {
+            statusDiv.textContent = "WebSocket: Disconnected";
+            statusDiv.className = "offline";
+        };
+
+        ws.onerror = (err) => {
+            console.error("WebSocket Error:", err);
+        };
+
+        ws.onmessage = (event) => {
+            console.log("Raw Data Received:", event.data);
+            const data = JSON.parse(event.data);
+            
+            // แปลง Timestamp ให้เป็นเวลาอ่านง่าย HH:MM:SS
+            let timeLabel = data.timestamp;
+            if (typeof data.timestamp === 'number') {
+                const date = new Date(data.timestamp * 1000);
+                timeLabel = date.toLocaleTimeString();
+            }
+
+            const inMbps = Number(data.in_mbps) || 0;
+            const outMbps = Number(data.out_mbps) || 0;
+
+            if (chart.data.labels.length >= 20) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.shift();
+            }
+
+            chart.data.labels.push(timeLabel);
+            chart.data.datasets[0].data.push(inMbps);
+            chart.data.datasets[1].data.push(outMbps);
+            chart.update();
+        };
+    </script>
+</body>
+</html>
